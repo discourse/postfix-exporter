@@ -18,7 +18,7 @@ Gem::Specification.new do |s|
 	s.email    = ["matt.palmer@discourse.org"]
 	s.homepage = "https://github.com/discourse/postfix-exporter"
 
-	s.files = `git ls-files -z`.split("\0").reject { |f| f =~ /^(G|spec|Rakefile)/ }
+	s.files = `git ls-files -z`.split("\0").reject { |f| f =~ /^(G|spec|Dockerfile|Rakefile)/ }
 	s.executables = ["postfix-exporter"]
 
 	s.required_ruby_version = ">= 2.1.0"
