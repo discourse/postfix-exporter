@@ -10,9 +10,10 @@ prometheus = Prometheus::Client.registry
 
 prometheus.gauge(:postfix_exporter_start_time_seconds, "When this process started up").set({}, Time.now.to_f)
 
-mailq = prometheus.gauge(:postfix_queue_size, "Number of messages in the mail queue")
-q_err = prometheus.counter(:postfix_queue_processing_error_total, "Exceptions raised whilst scanning the Postfix queue")
-up    = prometheus.gauge(:postfix_up, "Whether the master process is running or not")
+oldest = prometheus.gauge(:postfix_oldest_message_timestamp_seconds, "Queue time of the oldest message")
+mailq  = prometheus.gauge(:postfix_queue_size, "Number of messages in the mail queue")
+q_err  = prometheus.counter(:postfix_queue_processing_error_total, "Exceptions raised whilst scanning the Postfix queue")
+up     = prometheus.gauge(:postfix_up, "Whether the master process is running or not")
 
 Thread.abort_on_exception = true
 
@@ -58,6 +59,41 @@ Thread.new do
 		end
 
 		sleep 5
+
+	end
+end
+
+Thread.new do
+	earliest_ctime = ->(glob) do
+		# There is seemingly no way to unset or remove a gauge metric in the Ruby
+		# implementation of the prom exporter.  As a hack, we return the current
+		# time in cases where there is nothing to sample.
+		now = Time.now.to_i
+
+		Dir[glob].lazy.map do |n|
+			begin
+				File.stat(n).ctime.to_i
+			rescue Errno::ENOENT
+				now
+			end
+		end.min || now
+	end
+
+	loop do
+		begin
+			%w{incoming active corrupt hold}.each do |q|
+				oldest.set({ queue: q }, earliest_ctime["/var/spool/postfix/#{q}/*"])
+			end
+			oldest.set({ queue: 'deferred' }, earliest_ctime["/var/spool/postfix/deferred/*/*"])
+		rescue StandardError => ex
+			$stderr.puts "Error while sampling message ages: #{ex.message} (#{ex.class})"
+			$stderr.puts ex.backtrace.map { |l| "  #{l}" }.join("\n")
+			q_err.increment(class: ex.class.to_s, phase: "stat")
+		end
+
+		# stat()ing all the files in a large queue could potentially be quite
+		# expensive, so we sample this data less frequently.
+		sleep 60
 
 	end
 end
