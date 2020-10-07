@@ -28,5 +28,5 @@ Gem::Specification.new do |s|
 
 	s.add_development_dependency 'bundler'
 	s.add_development_dependency 'github-release'
-	s.add_development_dependency 'rake', '~> 10.4', '>= 10.4.2'
+	s.add_development_dependency 'rake'
 end
